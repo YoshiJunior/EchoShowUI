@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Echo Show UI</title>
+  <link href="https://unpkg.com/lucide@latest" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      font-family: "Segoe UI", sans-serif;
+      background: #000;
+      color: #d0f0d0;
+    }
+    .container {
+      display: flex;
+      width: 300vw;
+      height: 100vh;
+      transition: transform 0.5s ease;
+      transform: translateX(-100vw);
+    }
+    .screen {
+      flex: 0 0 100vw;
+      height: 100vh;
+      padding: 20px;
+      overflow-y: auto;
+      position: relative;
+    }
+
+    /* CLOCK SCREEN */
+    #clockScreen {
+      background: radial-gradient(circle at center, #111 0%, #000 90%);
+      animation: bgAnim 20s infinite alternate;
+    }
+    @keyframes bgAnim {
+      0% { background-position: left; }
+      100% { background-position: right; }
+    }
+    #clockCenter {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+    #clock {
+      font-size: 8vw;
+      color: #b6cfa2;
+    }
+    #date {
+      font-size: 2vw;
+      color: #ccc;
+    }
+
+    .section {
+      background: #111;
+      border-radius: 15px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 0 15px rgba(136, 170, 136, 0.2);
+    }
+    h2 {
+      margin-top: 0;
+      color: #b6cfa2;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .icon {
+      width: 20px;
+      height: 20px;
+      stroke: #b6cfa2;
+    }
+
+    /* MUSIC PLAYER */
+    #audio-container {
+      background: #1a1a1a;
+      border-radius: 20px;
+      padding: 20px;
+    }
+    .btn {
+      background: #6a8f3a;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 16px;
+      color: white;
+      margin: 0 10px;
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn svg {
+      width: 20px;
+      height: 20px;
+    }
+    #controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #customProgress {
+      width: 100%;
+      height: 10px;
+      background: #333;
+      border-radius: 5px;
+      margin-top: 10px;
+      overflow: hidden;
+    }
+    #progressBar {
+      width: 0%;
+      height: 100%;
+      background: #8fbc8f;
+      transition: width 0.1s;
+    }
+    .drag-area {
+      border: 2px dashed #8fbc8f;
+      border-radius: 15px;
+      padding: 20px;
+      text-align: center;
+      margin-top: 20px;
+      background: #0d0d0d;
+    }
+    .drag-area input {
+      display: none;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100px;
+      background: #111;
+      border-radius: 10px;
+      margin-top: 20px;
+    }
+    .weather-icon {
+      width: 60px;
+      height: 60px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container" id="container">
+    <div class="screen" id="musicScreen">
+      <div class="section">
+        <h2><i class="icon" data-lucide="music-2"></i> Now Playing</h2>
+        <div id="audio-container">
+          <audio id="audio" preload="metadata">
+            <source src="https://stream.bigfm.de/lofifocus/mp3-128/radiobrowser" type="audio/mpeg">
+          </audio>
+          <div id="controls">
+            <button class="btn" onclick="audio.play()"><i data-lucide="play"></i></button>
+            <button class="btn" onclick="audio.pause()"><i data-lucide="pause"></i></button>
+          </div>
+          <div id="customProgress"><div id="progressBar"></div></div>
+          <canvas id="visualizer"></canvas>
+        </div>
+        <div class="drag-area" id="upload">
+          Drag MP3 here or click to upload
+          <input type="file" id="fileInput" accept="audio/mp3" />
+        </div>
+      </div>
+    </div>
+    <div class="screen" id="clockScreen">
+      <div id="clockCenter">
+        <div id="clock"></div>
+        <div id="date"></div>
+      </div>
+    </div>
+    <div class="screen" id="weatherNewsScreen">
+      <div class="section">
+        <h2><i class="icon" data-lucide="cloud-sun"></i> Weather</h2>
+        <div id="weather"><img id="weatherIcon" class="weather-icon" /><span id="weatherText">Loading...</span></div>
+      </div>
+      <div class="section">
+        <h2><i class="icon" data-lucide="newspaper"></i> News</h2>
+        <ul id="news"></ul>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    lucide.createIcons();
+    function updateClock() {
+      const now = new Date();
+      const hours = now.getHours() % 12 || 12;
+      const minutes = now.getMinutes().toString().padStart(2, '0');
+      const ampm = now.getHours() >= 12 ? 'PM' : 'AM';
+      document.getElementById('clock').textContent = `${hours}:${minutes} ${ampm}`;
+      document.getElementById('date').textContent = now.toDateString();
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    let currentScreen = 1;
+    const container = document.getElementById('container');
+    function updateSlide(index) {
+      currentScreen = Math.max(0, Math.min(2, index));
+      container.style.transform = `translateX(-${currentScreen * 100}vw)`;
+    }
+    window.addEventListener('wheel', (e) => {
+      if (Math.abs(e.deltaX) > 30) updateSlide(currentScreen + (e.deltaX > 0 ? 1 : -1));
+    });
+    window.addEventListener('keydown', (e) => {
+      if (e.key === "ArrowRight") updateSlide(currentScreen + 1);
+      else if (e.key === "ArrowLeft") updateSlide(currentScreen - 1);
+    });
+
+    const audio = document.getElementById('audio');
+    const progressBar = document.getElementById('progressBar');
+    audio.addEventListener('timeupdate', () => {
+      if (!audio.duration) return;
+      const percent = (audio.currentTime / audio.duration) * 100;
+      progressBar.style.width = percent + '%';
+    });
+    const upload = document.getElementById('upload');
+    const fileInput = document.getElementById('fileInput');
+    upload.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0];
+      if (file) {
+        audio.src = URL.createObjectURL(file);
+        audio.play();
+      }
+    });
+
+    async function getWeather() {
+      try {
+        const res = await fetch('https://wttr.in/?format=j1');
+        const data = await res.json();
+        const current = data.current_condition[0];
+        document.getElementById('weatherText').textContent = `${current.temp_C}°C, ${current.weatherDesc[0].value}`;
+        document.getElementById('weatherIcon').src = current.weatherIconUrl[0].value;
+      } catch {
+        document.getElementById('weatherText').textContent = "Weather unavailable.";
+      }
+    }
+    getWeather();
+
+    async function getNews() {
+      try {
+        const res = await fetch('https://api.spaceflightnewsapi.net/v3/articles?_limit=5');
+        const data = await res.json();
+        const list = document.getElementById('news');
+        list.innerHTML = data.map(article => `<li><a href="${article.url}" target="_blank">${article.title}</a></li>`).join('');
+      } catch {
+        document.getElementById('news').innerHTML = "<li>News unavailable.</li>";
+      }
+    }
+    getNews();
+
+    const canvas = document.getElementById('visualizer');
+    const ctx = canvas.getContext('2d');
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const analyser = audioCtx.createAnalyser();
+    const source = audioCtx.createMediaElementSource(audio);
+    source.connect(analyser);
+    analyser.connect(audioCtx.destination);
+    analyser.fftSize = 64;
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    function draw() {
+      requestAnimationFrame(draw);
+      analyser.getByteFrequencyData(dataArray);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const barWidth = (canvas.width / bufferLength);
+      for (let i = 0; i < bufferLength; i++) {
+        const barHeight = dataArray[i];
+        ctx.fillStyle = `rgb(${barHeight + 50}, 200, 150)`;
+        ctx.fillRect(i * barWidth, canvas.height - barHeight / 2, barWidth - 2, barHeight / 2);
+      }
+    }
+    draw();
+  </script>
+</body>
+</html>
